@@ -1,0 +1,37 @@
+------------ Options -------------
+alpha: 0.0
+arch: default_convnet
+batch_size: 256
+dist_backend: nccl
+dist_url: tcp://224.66.41.62:23456
+epochs: 200
+evaluate: False
+gamma: 0.5
+gpu: None
+image_size: 224
+lr: 0.001
+model_name: mini_imagenet_1_shot_30_way
+momentum: 0.9
+multiprocessing_distributed: False
+n_episodes_train: 100
+n_episodes_val: 400
+n_query_train: 15
+n_query_val: 15
+n_support: 1
+n_way_train: 30
+n_way_val: 5
+optimizer: adam
+out_dim: None
+pretrained: False
+print_freq: 20
+rank: -1
+resume: 
+seed: None
+start_epoch: 0
+step_size: 20
+train_dir: None
+val_dir: None
+weight_decay: 0.0001
+workers: 24
+world_size: -1
+-------------- End ----------------

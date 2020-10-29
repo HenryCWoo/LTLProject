@@ -23,14 +23,19 @@ from samplers.episodic_batch_sampler import EpisodicBatchSampler
 from dataloaders.mini_imagenet_loader import MiniImageNet
 from torch.utils.data import DataLoader
 
+from models.attention import Attention
+
 
 model_names = sorted(name for name in models.__dict__ if name.islower() and not name.startswith("__")
                      and callable(models.__dict__[name]))
 model_names.append('default_convnet')
 
-parser = argparse.ArgumentParser(description='PyTorch Prototypical Networks Training')
-parser.add_argument('--train_dir', type=str, help='path to training data (default: none)')
-parser.add_argument('--val_dir', type=str, metavar='train_dir', help='path to validation data')
+parser = argparse.ArgumentParser(
+    description='PyTorch Prototypical Networks Training')
+parser.add_argument('--train_dir', type=str,
+                    help='path to training data (default: none)')
+parser.add_argument('--val_dir', type=str, metavar='train_dir',
+                    help='path to validation data')
 parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet18',
                     choices=model_names,
                     help='model architecture: ' + ' | '.join(model_names) + ' (default: resnet18)')
@@ -78,20 +83,31 @@ parser.add_argument('--multiprocessing-distributed', action='store_true',
                          'N processes per node, which has N GPUs. This is the '
                          'fastest way to use PyTorch for either single node or '
                          'multi node data parallel training')
-parser.add_argument('-s', '--image_size', default=224, type=int, help='Image Size to load images')
-parser.add_argument('--n_episodes_train', default=200, type=int, help='Number of episodes per epoch at train')
-parser.add_argument('--n_way_train', default=10, type=int, help='Number of classes per episode at train')
-parser.add_argument('--n_query_train', default=1, type=int, help='Number of query samples at train')
-parser.add_argument('--n_support', default=5, type=int, help='Number of support samples')
-parser.add_argument('--n_episodes_val', default=200, type=int, help='Number of episodes per epoch at validation')
-parser.add_argument('--n_way_val', default=10, type=int, help='Number of classes per episode at validation')
-parser.add_argument('--n_query_val', default=1, type=int, help='Number of query samples at validation')
-parser.add_argument('--optimizer', default='sgd', type=str, help='Optimizer to use: "adam" or "sgd"')
-parser.add_argument('--step_size', default=30, type=int, help='Scheduler step size')
+parser.add_argument('-s', '--image_size', default=224,
+                    type=int, help='Image Size to load images')
+parser.add_argument('--n_episodes_train', default=200,
+                    type=int, help='Number of episodes per epoch at train')
+parser.add_argument('--n_way_train', default=10, type=int,
+                    help='Number of classes per episode at train')
+parser.add_argument('--n_query_train', default=1, type=int,
+                    help='Number of query samples at train')
+parser.add_argument('--n_support', default=5, type=int,
+                    help='Number of support samples')
+parser.add_argument('--n_episodes_val', default=200, type=int,
+                    help='Number of episodes per epoch at validation')
+parser.add_argument('--n_way_val', default=10, type=int,
+                    help='Number of classes per episode at validation')
+parser.add_argument('--n_query_val', default=1, type=int,
+                    help='Number of query samples at validation')
+parser.add_argument('--optimizer', default='sgd', type=str,
+                    help='Optimizer to use: "adam" or "sgd"')
+parser.add_argument('--step_size', default=30, type=int,
+                    help='Scheduler step size')
 parser.add_argument('--gamma', default=0.1, type=float, help='Scheduler gamma')
 parser.add_argument('--alpha', default=0.0, type=float, help='Controls the contribution from past prototypes in next'
                                                              'episodes')
-parser.add_argument('--out_dim', default=None, type=int, help='Output embedding dimension')
+parser.add_argument('--out_dim', default=None, type=int,
+                    help='Output embedding dimension')
 
 best_acc1 = 0
 
@@ -137,7 +153,8 @@ def main():
         args.world_size = ngpus_per_node * args.world_size
         # Use torch.multiprocessing.spawn to launch distributed processes: the
         # main_worker process function
-        mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
+        mp.spawn(main_worker, nprocs=ngpus_per_node,
+                 args=(ngpus_per_node, args))
     else:
         # Simply call main_worker function
         main_worker(args.gpu, ngpus_per_node, args)
@@ -178,7 +195,8 @@ def main_worker(gpu, ngpus_per_node, args):
         else:
             model.fc = Identity()
 
-    print('Number of parameters: ', sum([p.numel() for p in model.parameters()]))
+    print('Number of parameters: ', sum(
+        [p.numel() for p in model.parameters()]))
 
     if args.distributed:
         # For multiprocessing distributed, DistributedDataParallel constructor
@@ -192,7 +210,8 @@ def main_worker(gpu, ngpus_per_node, args):
             # ourselves based on the total number of GPUs we have
             args.batch_size = int(args.batch_size / ngpus_per_node)
             args.workers = int(args.workers / ngpus_per_node)
-            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
+            model = torch.nn.parallel.DistributedDataParallel(
+                model, device_ids=[args.gpu])
         else:
             model.cuda()
             # DistributedDataParallel will divide and allocate batch_size to all
@@ -220,7 +239,8 @@ def main_worker(gpu, ngpus_per_node, args):
     else:
         raise ValueError('Optimizer should be "sgd" or "adam"')
 
-    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=args.gamma)
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(
+        optimizer, step_size=args.step_size, gamma=args.gamma)
 
     # Optionally resume from a checkpoint
     if args.resume:
@@ -253,16 +273,19 @@ def main_worker(gpu, ngpus_per_node, args):
         validate(val_loader, model, args)
         return
 
+    # Initialize self-attention mechanism
+    # HARD-CODED DIMENSIONS
+    att = Attention(1600, d_k=1600).cuda()
+
     for epoch in range(args.start_epoch, args.epochs):
-        lr_scheduler.step()
         if args.distributed:
             train_sampler.set_epoch(epoch)
 
         # Train for one epoch
-        loss_t, acc_t = train(train_loader, model, optimizer, epoch, args)
+        loss_t, acc_t = train(train_loader, model, att, optimizer, epoch, args)
 
         # Evaluate on validation set
-        loss_val, acc1 = validate(val_loader, model, args)
+        loss_val, acc1 = validate(val_loader, model, att, args)
 
         dict_metrics = {'loss_training': loss_t, 'loss_validation': loss_val,
                         'acc_training': acc_t, 'acc_validation': acc1}
@@ -274,6 +297,8 @@ def main_worker(gpu, ngpus_per_node, args):
         # Remember best acc@1 and save checkpoint
         is_best = acc1 > best_acc1
         best_acc1 = max(acc1, best_acc1)
+
+        lr_scheduler.step()
 
         if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                                                     and args.rank % ngpus_per_node == 0):
@@ -296,7 +321,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 }, is_best, results_dir)
 
 
-def train(train_loader, model, optimizer, epoch, args):
+def train(train_loader, model, att, optimizer, epoch, args):
     print("Training epoch %d" % epoch)
     episode_time = AverageMeter()
     data_time = AverageMeter()
@@ -320,16 +345,23 @@ def train(train_loader, model, optimizer, epoch, args):
         # Compute class prototypes (n_way, output_dim)
         if n_episode > 1 and args.alpha > 0.0:
             class_prototypes = args.alpha * class_prototypes + (1 - args.alpha) * \
-                model(data_support).reshape(args.n_support, args.n_way_train, -1).mean(dim=0)
+                model(data_support).reshape(args.n_support,
+                                            args.n_way_train, -1).mean(dim=0)
         else:
-            class_prototypes = model(data_support).reshape(args.n_support, args.n_way_train, -1).mean(dim=0)
+            class_prototypes = model(data_support).reshape(
+                args.n_support, args.n_way_train, -1).mean(dim=0)
 
         # Generate labels (n_way, n_query)
         labels = torch.arange(args.n_way_train).repeat(args.n_query_train)
         labels = labels.type(torch.cuda.LongTensor)
 
+        # Apply attention mechanism
+        latent_vectors = model(data_query)
+        z, scores = att(latent_vectors)
+
         # Compute loss and metrics
-        logits = euclidean_dist(model(data_query), class_prototypes)
+        # logits = euclidean_dist(model(data_query), class_prototypes)
+        logits = euclidean_dist(z, class_prototypes)
         loss = F.cross_entropy(logits, labels)
         acc = compute_accuracy(logits, labels)
 
@@ -365,7 +397,7 @@ def train(train_loader, model, optimizer, epoch, args):
     return losses.avg, accuracy.avg
 
 
-def validate(val_loader, model, args):
+def validate(val_loader, model, att, args):
     print('Validating...')
     losses = AverageMeter()
     accuracy = AverageMeter()
@@ -380,14 +412,20 @@ def validate(val_loader, model, args):
             data_support, data_query = data[:p], data[p:]
 
             # Compute class prototypes (n_way, output_dim)
-            class_prototypes = model(data_support).reshape(args.n_support, args.n_way_val, -1).mean(dim=0)
+            class_prototypes = model(data_support).reshape(
+                args.n_support, args.n_way_val, -1).mean(dim=0)
 
             # Generate labels (n_way, n_query)
             labels = torch.arange(args.n_way_val).repeat(args.n_query_val)
             labels = labels.type(torch.cuda.LongTensor)
 
+            # Apply attention mechanism
+            latent_vectors = model(data_query)
+            z, scores = att(latent_vectors)
+
             # Compute loss and metrics
-            logits = euclidean_dist(model(data_query), class_prototypes)
+            # logits = euclidean_dist(model(data_query), class_prototypes)
+            logits = euclidean_dist(z, class_prototypes)
             loss = F.cross_entropy(logits, labels)
             acc = compute_accuracy(logits, labels)
 

@@ -28,9 +28,12 @@ model_names = sorted(name for name in models.__dict__
                      if name.islower() and not name.startswith("__")
                      and callable(models.__dict__[name]))
 
-parser = argparse.ArgumentParser(description='PyTorch Prototypical Networks Training')
-parser.add_argument('--train_dir', type=str, help='path to training data (default: none)')
-parser.add_argument('--val_dir', type=str, metavar='train_dir', help='path to validation data')
+parser = argparse.ArgumentParser(
+    description='PyTorch Prototypical Networks Training')
+parser.add_argument('--train_dir', type=str,
+                    help='path to training data (default: none)')
+parser.add_argument('--val_dir', type=str, metavar='train_dir',
+                    help='path to validation data')
 parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet18',
                     choices=model_names,
                     help='model architecture: ' + ' | '.join(model_names) + ' (default: resnet18)')
@@ -82,20 +85,31 @@ parser.add_argument('--subtract_mean', type=float, default=(0.5, 0.5, 0.5), narg
                     help='Substract mean of image channels when loading the data')
 parser.add_argument('--subtract_std', type=float, default=(0.5, 0.5, 0.5), nargs=3,
                     help='Divide by std of image channels when loading the data')
-parser.add_argument('-s', '--image_size', default=224, type=int, help='Image Size to load images')
-parser.add_argument('--n_episodes_train', default=200, type=int, help='Number of episodes per epoch at train')
-parser.add_argument('--n_way_train', default=10, type=int, help='Number of classes per episode at train')
-parser.add_argument('--n_query_train', default=1, type=int, help='Number of query samples at train')
-parser.add_argument('--n_support', default=5, type=int, help='Number of support samples')
-parser.add_argument('--n_episodes_val', default=200, type=int, help='Number of episodes per epoch at validation')
-parser.add_argument('--n_way_val', default=10, type=int, help='Number of classes per episode at validation')
-parser.add_argument('--n_query_val', default=1, type=int, help='Number of query samples at validation')
-parser.add_argument('--optimizer', default='sgd', type=str, help='Optimizer to use: "adam" or "sgd"')
-parser.add_argument('--step_size', default=30, type=int, help='Scheduler step size')
+parser.add_argument('-s', '--image_size', default=224,
+                    type=int, help='Image Size to load images')
+parser.add_argument('--n_episodes_train', default=200,
+                    type=int, help='Number of episodes per epoch at train')
+parser.add_argument('--n_way_train', default=10, type=int,
+                    help='Number of classes per episode at train')
+parser.add_argument('--n_query_train', default=1, type=int,
+                    help='Number of query samples at train')
+parser.add_argument('--n_support', default=5, type=int,
+                    help='Number of support samples')
+parser.add_argument('--n_episodes_val', default=200, type=int,
+                    help='Number of episodes per epoch at validation')
+parser.add_argument('--n_way_val', default=10, type=int,
+                    help='Number of classes per episode at validation')
+parser.add_argument('--n_query_val', default=1, type=int,
+                    help='Number of query samples at validation')
+parser.add_argument('--optimizer', default='sgd', type=str,
+                    help='Optimizer to use: "adam" or "sgd"')
+parser.add_argument('--step_size', default=30, type=int,
+                    help='Scheduler step size')
 parser.add_argument('--gamma', default=0.1, type=float, help='Scheduler gamma')
 parser.add_argument('--alpha', default=0.0, type=float, help='Controls the contribution from past prototypes in next'
                                                              'episodes')
-parser.add_argument('--out_dim', default=None, type=int, help='Output embedding dimension')
+parser.add_argument('--out_dim', default=None, type=int,
+                    help='Output embedding dimension')
 
 best_acc1 = 0
 
@@ -141,7 +155,8 @@ def main():
         args.world_size = ngpus_per_node * args.world_size
         # Use torch.multiprocessing.spawn to launch distributed processes: the
         # main_worker process function
-        mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
+        mp.spawn(main_worker, nprocs=ngpus_per_node,
+                 args=(ngpus_per_node, args))
     else:
         # Simply call main_worker function
         main_worker(args.gpu, ngpus_per_node, args)
@@ -179,7 +194,8 @@ def main_worker(gpu, ngpus_per_node, args):
     else:
         model.fc = Identity()
 
-    print('Number of parameters: ', sum([p.numel() for p in model.parameters()]))
+    print('Number of parameters: ', sum(
+        [p.numel() for p in model.parameters()]))
 
     if args.distributed:
         # For multiprocessing distributed, DistributedDataParallel constructor
@@ -193,7 +209,8 @@ def main_worker(gpu, ngpus_per_node, args):
             # ourselves based on the total number of GPUs we have
             args.batch_size = int(args.batch_size / ngpus_per_node)
             args.workers = int(args.workers / ngpus_per_node)
-            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
+            model = torch.nn.parallel.DistributedDataParallel(
+                model, device_ids=[args.gpu])
         else:
             model.cuda()
             # DistributedDataParallel will divide and allocate batch_size to all
@@ -218,7 +235,8 @@ def main_worker(gpu, ngpus_per_node, args):
     elif args.optimizer == 'adam':
         optimizer = torch.optim.Adam(model.parameters(), args.lr)
 
-    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=args.gamma)
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(
+        optimizer, step_size=args.step_size, gamma=args.gamma)
 
     # optionally resume from a checkpoint
     if args.resume:
@@ -246,7 +264,8 @@ def main_worker(gpu, ngpus_per_node, args):
         print('One or more of the subtract std values were above 1, dividing by 255...')
         std /= 255
 
-    print('Normalizing by mean of %.4f, %.4f, %.4f' % (mean[0], mean[1], mean[2]))
+    print('Normalizing by mean of %.4f, %.4f, %.4f' %
+          (mean[0], mean[1], mean[2]))
     print('Normalizing by std of %.4f, %.4f, %.4f' % (std[0], std[1], std[2]))
 
     normalize = transforms.Normalize(mean=mean, std=std)
@@ -349,9 +368,11 @@ def train(train_loader, model, optimizer, epoch, args):
         # Compute class prototypes (n_way, output_dim)
         if n_episode > 1 and args.alpha > 0.0:
             class_prototypes = args.alpha * class_prototypes + (1 - args.alpha) * \
-                model(data_support).reshape(args.n_support, args.n_way_train, -1).mean(dim=0)
+                model(data_support).reshape(args.n_support,
+                                            args.n_way_train, -1).mean(dim=0)
         else:
-            class_prototypes = model(data_support).reshape(args.n_support, args.n_way_train, -1).mean(dim=0)
+            class_prototypes = model(data_support).reshape(
+                args.n_support, args.n_way_train, -1).mean(dim=0)
 
         # Generate labels (n_way, n_query)
         labels = torch.arange(args.n_way_train).repeat(args.n_query_train)
@@ -412,7 +433,8 @@ def validate(val_loader, model, args):
             data_support, data_query = data[:p], data[p:]
 
             # Compute class prototypes (n_way, output_dim)
-            class_prototypes = model(data_support).reshape(args.n_support, args.n_way_val, -1).mean(dim=0)
+            class_prototypes = model(data_support).reshape(
+                args.n_support, args.n_way_val, -1).mean(dim=0)
 
             # Generate labels (n_way, n_query)
             labels = torch.arange(args.n_way_val).repeat(args.n_query_val)

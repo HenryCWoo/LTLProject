@@ -1,0 +1,16 @@
+------------ Options -------------
+arch: default_convnet
+batch_size: 64
+checkpoint: models_trained/mini_imagenet_1_shot_30_way/model_best_acc.pth.tar
+cpu: False
+evaluation_name: mini_imagenet_1_shot_30_way
+gpu: 0
+n_episodes: 2000
+n_query: 30
+n_support: 1
+n_way: 5
+results_name: None
+test_dir: None
+train_dir: None
+workers: 24
+-------------- End ----------------
