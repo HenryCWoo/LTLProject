@@ -345,10 +345,10 @@ def train(train_loader, model, att, optimizer, epoch, args):
         # Compute class prototypes (n_way, output_dim)
         if n_episode > 1 and args.alpha > 0.0:
             class_prototypes = args.alpha * class_prototypes + (1 - args.alpha) * \
-                model(data_support).reshape(args.n_support,
-                                            args.n_way_train, -1).mean(dim=0)
+                att(model(data_support)).reshape(args.n_support,
+                                                 args.n_way_train, -1).mean(dim=0)
         else:
-            class_prototypes = model(data_support).reshape(
+            class_prototypes = att(model(data_support)).reshape(
                 args.n_support, args.n_way_train, -1).mean(dim=0)
 
         # Generate labels (n_way, n_query)
@@ -412,7 +412,7 @@ def validate(val_loader, model, att, args):
             data_support, data_query = data[:p], data[p:]
 
             # Compute class prototypes (n_way, output_dim)
-            class_prototypes = model(data_support).reshape(
+            class_prototypes = att(model(data_support)).reshape(
                 args.n_support, args.n_way_val, -1).mean(dim=0)
 
             # Generate labels (n_way, n_query)
