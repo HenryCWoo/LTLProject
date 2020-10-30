@@ -330,6 +330,7 @@ def train(train_loader, model, att, optimizer, epoch, args):
 
     # Switch to train mode
     model.train()
+    att.train()
 
     end = time.time()
 
@@ -344,8 +345,13 @@ def train(train_loader, model, att, optimizer, epoch, args):
 
         # Compute class prototypes (n_way, output_dim)
         # Calculate weighted averages for class prototypes
+        # (n_support, n_way_train, feature_dimension)
         latent_vecs_supp = model(data_support).reshape(
             args.n_support, args.n_way_train, -1)
+
+        # (n_way_train, n_support, feature_dimension)
+        latent_vecs_supp = latent_vecs_supp.transpose(0, 1)
+
         _, scores_supp = att(latent_vecs_supp)
         scores_supp = scores_supp.unsqueeze(-1).expand_as(latent_vecs_supp)
         weighted_avg = torch.sum(torch.mul(scores_supp, latent_vecs_supp), 1)
@@ -407,6 +413,7 @@ def validate(val_loader, model, att, args):
 
     # Switch to evaluate mode
     model.eval()
+    att.eval()
 
     with torch.no_grad():
         for n_episode, batch in enumerate(val_loader, 1):
@@ -416,12 +423,17 @@ def validate(val_loader, model, att, args):
 
             # Compute class prototypes (n_way, output_dim)
             # Calculate weighted averages for class prototypes
-            latent_vecs_supp = model(data_support).reshape(
+            # (n_support, n_way_val feature_dimension)
+            latent_vecs_val = model(data_support).reshape(
                 args.n_support, args.n_way_val, -1)
-            _, scores_supp = att(latent_vecs_supp)
-            scores_supp = scores_supp.unsqueeze(-1).expand_as(latent_vecs_supp)
+
+            # (n_way_train, n_val, feature_dimension)
+            latent_vecs_val = latent_vecs_val.transpose(0, 1)
+
+            _, scores_val = att(latent_vecs_val)
+            scores_val = scores_val.unsqueeze(-1).expand_as(latent_vecs_val)
             class_prototypes = torch.sum(
-                torch.mul(scores_supp, latent_vecs_supp), 1)
+                torch.mul(scores_val, latent_vecs_val), 1)
             # class_prototypes = att(model(data_support)).reshape(
             #     args.n_support, args.n_way_val, -1).mean(dim=0)
 
