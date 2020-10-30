@@ -345,7 +345,7 @@ def train(train_loader, model, att, optimizer, epoch, args):
         # Compute class prototypes (n_way, output_dim)
         # Calculate weighted averages for class prototypes
         latent_vecs_supp = model(data_support).reshape(
-            args.n_way_train, args.n_support, -1)
+            args.n_support, args.n_way_train, -1)
         _, scores_supp = att(latent_vecs_supp)
         scores_supp = scores_supp.unsqueeze(-1).expand_as(latent_vecs_supp)
         weighted_avg = torch.sum(torch.mul(scores_supp, latent_vecs_supp), 1)
@@ -417,7 +417,7 @@ def validate(val_loader, model, att, args):
             # Compute class prototypes (n_way, output_dim)
             # Calculate weighted averages for class prototypes
             latent_vecs_supp = model(data_support).reshape(
-                args.n_way_val, args.n_support, -1)
+                args.n_support, args.n_way_val, -1)
             _, scores_supp = att(latent_vecs_supp)
             scores_supp = scores_supp.unsqueeze(-1).expand_as(latent_vecs_supp)
             class_prototypes = torch.sum(
