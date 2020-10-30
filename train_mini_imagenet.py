@@ -23,7 +23,7 @@ from samplers.episodic_batch_sampler import EpisodicBatchSampler
 from dataloaders.mini_imagenet_loader import MiniImageNet
 from torch.utils.data import DataLoader
 
-from models.attention import Attention
+from models.attention import AverageAttention
 
 
 model_names = sorted(name for name in models.__dict__ if name.islower() and not name.startswith("__")
@@ -275,7 +275,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
     # Initialize self-attention mechanism
     # HARD-CODED DIMENSIONS
-    att = Attention(1600, d_k=1600).cuda()
+    att = AverageAttention(1600, d_k=1600).cuda()
 
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
@@ -343,25 +343,28 @@ def train(train_loader, model, att, optimizer, epoch, args):
         data_support, data_query = data[:p], data[p:]
 
         # Compute class prototypes (n_way, output_dim)
+        # Calculate weighted averages for class prototypes
+        latent_vecs_supp = model(data_support).reshape(
+            args.n_way_train, args.n_support, -1)
+        _, scores_supp = att(latent_vecs_supp)
+        scores_supp = scores_supp.unsqueeze(-1).expand_as(latent_vecs_supp)
+        weighted_avg = torch.sum(torch.mul(scores_supp, latent_vecs_supp), 1)
+
         if n_episode > 1 and args.alpha > 0.0:
-            class_prototypes = args.alpha * class_prototypes + (1 - args.alpha) * \
-                att(model(data_support)).reshape(args.n_support,
-                                                 args.n_way_train, -1).mean(dim=0)
+            # class_prototypes = args.alpha * class_prototypes + (1 - args.alpha) * \
+            #     att(model(data_support)).reshape(args.n_support,
+            #                                      args.n_way_train, -1).mean(dim=0)
+            class_prototypes = args.alpha * class_prototypes + \
+                (1 - args.alpha) * weighted_avg
         else:
-            class_prototypes = att(model(data_support)).reshape(
-                args.n_support, args.n_way_train, -1).mean(dim=0)
+            class_prototypes = weighted_avg
 
         # Generate labels (n_way, n_query)
         labels = torch.arange(args.n_way_train).repeat(args.n_query_train)
         labels = labels.type(torch.cuda.LongTensor)
 
-        # Apply attention mechanism
-        latent_vectors = model(data_query)
-        z, scores = att(latent_vectors)
-
         # Compute loss and metrics
-        # logits = euclidean_dist(model(data_query), class_prototypes)
-        logits = euclidean_dist(z, class_prototypes)
+        logits = euclidean_dist(model(data_query), class_prototypes)
         loss = F.cross_entropy(logits, labels)
         acc = compute_accuracy(logits, labels)
 
@@ -412,20 +415,22 @@ def validate(val_loader, model, att, args):
             data_support, data_query = data[:p], data[p:]
 
             # Compute class prototypes (n_way, output_dim)
-            class_prototypes = att(model(data_support)).reshape(
-                args.n_support, args.n_way_val, -1).mean(dim=0)
+            # Calculate weighted averages for class prototypes
+            latent_vecs_supp = model(data_support).reshape(
+                args.n_way_train, args.n_support, -1)
+            _, scores_supp = att(latent_vecs_supp)
+            scores_supp = scores_supp.unsqueeze(-1).expand_as(latent_vecs_supp)
+            class_prototypes = torch.sum(
+                torch.mul(scores_supp, latent_vecs_supp), 1)
+            # class_prototypes = att(model(data_support)).reshape(
+            #     args.n_support, args.n_way_val, -1).mean(dim=0)
 
             # Generate labels (n_way, n_query)
             labels = torch.arange(args.n_way_val).repeat(args.n_query_val)
             labels = labels.type(torch.cuda.LongTensor)
 
-            # Apply attention mechanism
-            latent_vectors = model(data_query)
-            z, scores = att(latent_vectors)
-
             # Compute loss and metrics
-            # logits = euclidean_dist(model(data_query), class_prototypes)
-            logits = euclidean_dist(z, class_prototypes)
+            logits = euclidean_dist(model(data_query), class_prototypes)
             loss = F.cross_entropy(logits, labels)
             acc = compute_accuracy(logits, labels)
 

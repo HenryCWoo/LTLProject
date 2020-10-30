@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import numpy as np
 
 
-class Attention(nn.Module):
+class AverageAttention(nn.Module):
     def __init__(self, vec_dim, d_k=64):
         super().__init__()
 
@@ -17,7 +17,9 @@ class Attention(nn.Module):
         self.w_v = nn.Linear(vec_dim, d_k)
 
     def attention(self, q, k, v):
-        scores = torch.matmul(q, k.transpose(-1, -2)) / np.sqrt(self.d_k)
+        # Average Attention
+        scores = torch.matmul(q, k.transpose(-1, -2)
+                              ).mean(1) / np.sqrt(self.d_k)
         scores = F.softmax(scores, dim=-1)
         z = torch.matmul(scores, v)
         return (z, scores)
@@ -34,9 +36,11 @@ class Attention(nn.Module):
 
 
 if __name__ == '__main__':
-    att = Attention(4)
+    att = AverageAttention(4)
     x = torch.Tensor([[1, 2, 3, 4], [5, 6, 7, 8]])
-    z = att(x)
+    z, score = att(x)
 
-    print(z)
-    print(z.shape)
+    # print(z)
+    # print(z.shape)
+    print(score)
+    print(score.shape)
