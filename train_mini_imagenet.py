@@ -417,7 +417,7 @@ def validate(val_loader, model, att, args):
             # Compute class prototypes (n_way, output_dim)
             # Calculate weighted averages for class prototypes
             latent_vecs_supp = model(data_support).reshape(
-                args.n_way_train, args.n_support, -1)
+                args.n_way_val, args.n_support, -1)
             _, scores_supp = att(latent_vecs_supp)
             scores_supp = scores_supp.unsqueeze(-1).expand_as(latent_vecs_supp)
             class_prototypes = torch.sum(
