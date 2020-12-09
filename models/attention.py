@@ -35,6 +35,26 @@ class AverageAttention(nn.Module):
         return z, scores
 
 
+class LinearAttention(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc1 = nn.Linear(1600, 1024)
+        self.fc2 = nn.Linear(1024, 512)
+        self.fc3 = nn.Linear(512, 1)
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = F.relu(x, inplace=True)
+
+        x = self.fc2(x)
+        x = F.relu(x, inplace=True)
+
+        x = self.fc3(x)
+        scores = F.relu(x, inplace=True)
+
+        return scores
+
+
 if __name__ == '__main__':
     att = AverageAttention(4)
     x = torch.Tensor([[1, 2, 3, 4], [5, 6, 7, 8]])

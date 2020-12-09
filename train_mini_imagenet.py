@@ -23,7 +23,7 @@ from samplers.episodic_batch_sampler import EpisodicBatchSampler
 from dataloaders.mini_imagenet_loader import MiniImageNet
 from torch.utils.data import DataLoader
 
-from models.attention import AverageAttention
+from models.attention import AverageAttention, LinearAttention
 
 
 model_names = sorted(name for name in models.__dict__ if name.islower() and not name.startswith("__")
@@ -228,6 +228,15 @@ def main_worker(gpu, ngpus_per_node, args):
         else:
             model = torch.nn.DataParallel(model).cuda()
 
+    ##### INITIALIZE ATTENTION ######
+
+    # # Initialize self-attention mechanism
+    # # HARD-CODED DIMENSIONS
+    # att = AverageAttention(1600, d_k=1600).cuda()
+
+    # Initialize attention using Fully Connected Layers
+    att = LinearAttention().cuda()
+
     # Define optimizer
     if args.optimizer == 'sgd':
         optimizer = torch.optim.SGD(model.parameters(), args.lr,
@@ -250,6 +259,7 @@ def main_worker(gpu, ngpus_per_node, args):
             args.start_epoch = checkpoint['epoch']
             best_acc1 = checkpoint['best_acc1']
             model.load_state_dict(checkpoint['state_dict'])
+            att.load_state_dict(checkpoint['attention'])
             optimizer.load_state_dict(checkpoint['optimizer'])
             print("=> loaded checkpoint '{}' (epoch {})"
                   .format(args.resume, checkpoint['epoch']))
@@ -272,10 +282,6 @@ def main_worker(gpu, ngpus_per_node, args):
     if args.evaluate:
         validate(val_loader, model, args)
         return
-
-    # Initialize self-attention mechanism
-    # HARD-CODED DIMENSIONS
-    att = AverageAttention(1600, d_k=1600).cuda()
 
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
@@ -308,6 +314,7 @@ def main_worker(gpu, ngpus_per_node, args):
                     'epoch': epoch + 1,
                     'arch': args.arch,
                     'state_dict': model.module.state_dict(),
+                    'attention': att.state_dict(),
                     'best_acc1': best_acc1,
                     'optimizer': optimizer.state_dict(),
                 }, is_best, results_dir)
@@ -316,6 +323,7 @@ def main_worker(gpu, ngpus_per_node, args):
                     'epoch': epoch + 1,
                     'arch': args.arch,
                     'state_dict': model.state_dict(),
+                    'attention': att.state_dict(),
                     'best_acc1': best_acc1,
                     'optimizer': optimizer.state_dict(),
                 }, is_best, results_dir)
@@ -352,8 +360,11 @@ def train(train_loader, model, att, optimizer, epoch, args):
         # (n_way_train, n_support, feature_dimension)
         latent_vecs_supp = latent_vecs_supp.transpose(0, 1)
 
-        _, scores_supp = att(latent_vecs_supp)
-        scores_supp = scores_supp.unsqueeze(-1).expand_as(latent_vecs_supp)
+        # _, scores_supp = att(latent_vecs_supp)
+        scores_supp = F.softmax(att(latent_vecs_supp), dim=1)
+        # scores_supp = scores_supp.unsqueeze(-1).expand_as(latent_vecs_supp)
+        scores_supp = scores_supp.expand_as(latent_vecs_supp)
+        # weighted_avg = torch.sum(torch.mul(scores_supp, latent_vecs_supp), 1)
         weighted_avg = torch.sum(torch.mul(scores_supp, latent_vecs_supp), 1)
 
         if n_episode > 1 and args.alpha > 0.0:
@@ -430,8 +441,12 @@ def validate(val_loader, model, att, args):
             # (n_way_train, n_val, feature_dimension)
             latent_vecs_val = latent_vecs_val.transpose(0, 1)
 
-            _, scores_val = att(latent_vecs_val)
-            scores_val = scores_val.unsqueeze(-1).expand_as(latent_vecs_val)
+            # _, scores_val = att(latent_vecs_val)
+            scores_val = F.softmax(att(latent_vecs_val), dim=0)
+            # scores_val = scores_val.unsqueeze(-1).expand_as(latent_vecs_val)
+            scores_val = scores_val.expand_as(latent_vecs_val)
+            # class_prototypes = torch.sum(
+            #     torch.matmul(scores_val, latent_vecs_val), 1)
             class_prototypes = torch.sum(
                 torch.mul(scores_val, latent_vecs_val), 1)
             # class_prototypes = att(model(data_support)).reshape(
