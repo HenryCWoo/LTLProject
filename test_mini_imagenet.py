@@ -19,15 +19,20 @@ from models.identity import Identity
 from utils import AverageMeter, compute_accuracy, euclidean_dist, mkdir
 from torch.utils.data import DataLoader
 
+from models.attention import LinearAttention
+
 
 model_names = sorted(name for name in models.__dict__
                      if name.islower() and not name.startswith("__")
                      and callable(models.__dict__[name]))
 model_names.append('default_convnet')
 
-parser = argparse.ArgumentParser(description='Pytorch Prototypical Networks Testing')
-parser.add_argument('--train_dir', type=str, help='path to training data (default: none)')
-parser.add_argument('--test_dir', type=str, metavar='train_dir', help='path to validation data')
+parser = argparse.ArgumentParser(
+    description='Pytorch Prototypical Networks Testing')
+parser.add_argument('--train_dir', type=str,
+                    help='path to training data (default: none)')
+parser.add_argument('--test_dir', type=str,
+                    metavar='train_dir', help='path to validation data')
 parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet18',
                     choices=model_names,
                     help='model architecture: ' + ' | '.join(model_names) + ' (default: resnet18)')
@@ -36,13 +41,18 @@ parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
 parser.add_argument('--batch_size', default=64, type=int, help='Batch size')
 parser.add_argument('--evaluation_name', type=str, help='Evaluation name')
 parser.add_argument('--gpu', default=None, type=int, help='GPU id to use.')
-parser.add_argument('--cpu', default=False, action='store_true', help='CPU mode')
+parser.add_argument('--cpu', default=False,
+                    action='store_true', help='CPU mode')
 parser.add_argument('--checkpoint', type=str, help='model checkpoint path')
 parser.add_argument('--results_name', type=str, help='name of the results csv')
-parser.add_argument('--n_episodes', default=None, type=int, help='Number of episodes to average')
-parser.add_argument('--n_way', default=None, type=int, help='Number of classes per episode')
-parser.add_argument('--n_support', default=None, type=int, help='Number of support samples per class')
-parser.add_argument('--n_query', default=None, type=int, help='Number of query samples')
+parser.add_argument('--n_episodes', default=None, type=int,
+                    help='Number of episodes to average')
+parser.add_argument('--n_way', default=None, type=int,
+                    help='Number of classes per episode')
+parser.add_argument('--n_support', default=None, type=int,
+                    help='Number of support samples per class')
+parser.add_argument('--n_query', default=None, type=int,
+                    help='Number of query samples')
 
 
 def main():
@@ -66,6 +76,9 @@ def main():
     # Create model
     print("=> creating model '{}'".format(args.arch))
 
+    # Create Attention Model
+    att = LinearAttention()
+
     if args.arch == 'default_convnet':
         model = ConvNet()
     else:
@@ -82,6 +95,7 @@ def main():
         print("=> loading checkpoint '{}'".format(args.checkpoint))
         checkpoint = torch.load(args.checkpoint)
         model.load_state_dict(checkpoint['state_dict'])
+        att.load_state_dict(checkpoint['attention'])
         print("=> loaded checkpoint '{}' )".format(args.checkpoint))
     else:
         print("=> no checkpoint found at '{}'".format(args.checkpoint))
@@ -89,22 +103,25 @@ def main():
     if not args.cpu:
         torch.cuda.set_device(args.gpu)
         model = model.cuda(args.gpu)
+        att = att.cuda(args.gpu)
 
     model.eval()
+    att.eval()
 
     cudnn.benchmark = True
 
     # Testing data
     test_dataset = MiniImageNet('test')
 
-    test_sampler = EpisodicBatchSampler(test_dataset.labels, args.n_episodes, args.n_way, args.n_support + args.n_query)
+    test_sampler = EpisodicBatchSampler(
+        test_dataset.labels, args.n_episodes, args.n_way, args.n_support + args.n_query)
     test_loader = DataLoader(dataset=test_dataset, batch_sampler=test_sampler,
                              num_workers=args.workers, pin_memory=True)
 
-    test(test_loader, model, args)
+    test(test_loader, model, att, args)
 
 
-def test(test_loader, model, args):
+def test(test_loader, model, att, args):
     print('Testing...')
     losses = AverageMeter()
     accuracy = AverageMeter()
@@ -118,8 +135,21 @@ def test(test_loader, model, args):
             p = args.n_support * args.n_way
             data_support, data_query = data[:p], data[p:]
 
+            latent_vecs = model(data_support).reshape(
+                args.n_support, args.n_way, -1)
+
+            # (n_way_train, n_val, feature_dimension)
+            latent_vecs = latent_vecs.transpose(0, 1)
+
+            # _, scores_val = att(latent_vecs_val)
+            scores = F.softmax(att(latent_vecs), dim=1)
+            scores = scores.expand_as(latent_vecs)
+
+            class_prototypes = torch.sum(torch.mul(scores, latent_vecs), 1)
+
             # Compute class prototypes (n_way, output_dim)
-            class_prototypes = model(data_support).reshape(args.n_support, args.n_way, -1).mean(dim=0)
+            # class_prototypes = model(data_support).reshape(
+            #     args.n_support, args.n_way, -1).mean(dim=1)
 
             # Generate labels (n_way, n_query)
             labels = torch.arange(args.n_way).repeat(args.n_query)

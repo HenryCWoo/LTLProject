@@ -239,11 +239,12 @@ def main_worker(gpu, ngpus_per_node, args):
 
     # Define optimizer
     if args.optimizer == 'sgd':
-        optimizer = torch.optim.SGD(model.parameters(), args.lr,
+        optimizer = torch.optim.SGD(list(model.parameters()) + list(att.parameters()), args.lr,
                                     momentum=args.momentum,
                                     weight_decay=args.weight_decay)
     elif args.optimizer == 'adam':
-        optimizer = torch.optim.Adam(model.parameters(), args.lr)
+        optimizer = torch.optim.Adam(
+            list(model.parameters()) + list(att.parameters()), args.lr)
 
     else:
         raise ValueError('Optimizer should be "sgd" or "adam"')
@@ -362,8 +363,10 @@ def train(train_loader, model, att, optimizer, epoch, args):
 
         # _, scores_supp = att(latent_vecs_supp)
         scores_supp = F.softmax(att(latent_vecs_supp), dim=1)
+
         # scores_supp = scores_supp.unsqueeze(-1).expand_as(latent_vecs_supp)
         scores_supp = scores_supp.expand_as(latent_vecs_supp)
+
         # weighted_avg = torch.sum(torch.mul(scores_supp, latent_vecs_supp), 1)
         weighted_avg = torch.sum(torch.mul(scores_supp, latent_vecs_supp), 1)
 
@@ -442,7 +445,7 @@ def validate(val_loader, model, att, args):
             latent_vecs_val = latent_vecs_val.transpose(0, 1)
 
             # _, scores_val = att(latent_vecs_val)
-            scores_val = F.softmax(att(latent_vecs_val), dim=0)
+            scores_val = F.softmax(att(latent_vecs_val), dim=1)
             # scores_val = scores_val.unsqueeze(-1).expand_as(latent_vecs_val)
             scores_val = scores_val.expand_as(latent_vecs_val)
             # class_prototypes = torch.sum(
